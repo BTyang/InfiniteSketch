@@ -10,6 +10,7 @@ import android.graphics.Rect;
 import android.graphics.RectF;
 import android.support.annotation.NonNull;
 import android.util.AttributeSet;
+import android.util.Log;
 import android.view.MotionEvent;
 import android.view.View;
 
@@ -35,10 +36,21 @@ public class InfiniteCanvas extends View {
     private Stroke curStroke;
     private Bitmap thumbnailBM;//缩略图文件
     private Rect localizerRect;
-    private Rect thumbnailRect;
+    private RectF thumbnailRect;
+    private RectF thumbnailBorderRect;
     private RectF strokeRangeRect;
     private List<Stroke> strokes = new ArrayList<>();
     private int mWidth, mHeight;
+    private POINT_MODE mode = POINT_MODE.DRAW;
+
+    enum POINT_MODE {
+        DRAG,
+        DRAW
+    }
+
+    public void setMode(POINT_MODE mode) {
+        this.mode = mode;
+    }
 
     public InfiniteCanvas(Context context) {
         super(context);
@@ -58,7 +70,8 @@ public class InfiniteCanvas extends View {
     private void init() {
         drawPaint.setStrokeWidth(0);
         drawPaint.setAntiAlias(true);
-        thumbnailRect = new Rect();
+        thumbnailBorderRect = new RectF(50, 50, 0, 0);
+        thumbnailRect = new RectF();
         localizerRect = new Rect();
         strokeRangeRect = new RectF();
         outlinePaint.setStyle(Paint.Style.STROKE);
@@ -79,8 +92,8 @@ public class InfiniteCanvas extends View {
         super.onLayout(changed, left, top, right, bottom);
         mWidth = right - left;
         mHeight = bottom - top;
-        thumbnailRect.right = (int) (mWidth / 4f);
-        thumbnailRect.bottom = (int) (mHeight / 4f);
+        thumbnailBorderRect.right = thumbnailBorderRect.left + (int) (mWidth / 3f);
+        thumbnailBorderRect.bottom = thumbnailBorderRect.top + (int) (mHeight / 3f);
     }
 
     @Override
@@ -92,21 +105,21 @@ public class InfiniteCanvas extends View {
                 strokes.add(curStroke);
                 break;
             case MotionEvent.ACTION_MOVE:
-                if (event.getPointerCount() > 1) {
+                if (event.getPointerCount() > 1 || mode == POINT_MODE.DRAG) {
                     offsetX += startPoint.x - event.getX();
                     offsetY += startPoint.y - event.getY();
                     startPoint = new PointF(event.getX(), event.getY());
                 } else {
                     addPoint(event.getX(), event.getY());
+                    updateStrokeRange(event);
                 }
-                updateStrokeRange(event);
                 invalidate();
                 break;
             case MotionEvent.ACTION_UP:
             case MotionEvent.ACTION_CANCEL:
                 startPoint = null;
                 createCurThumbnailBM();
-                updateStrokeRange(event);
+//                updateStrokeRange(event);
                 invalidate();
                 break;
         }
@@ -157,24 +170,38 @@ public class InfiniteCanvas extends View {
         canvas.save();
         canvas.translate(offsetX, offsetY);
         if (thumbnailBM != null && !thumbnailBM.isRecycled()) {
-            int left = 50, top = 50;
+            float left = thumbnailBorderRect.left, top = thumbnailBorderRect.top;
+
+            float widthRatio = 1f * (thumbnailBorderRect.right - thumbnailBorderRect.left) / thumbnailBM.getWidth();
+            float heightRatio = 1f * (thumbnailBorderRect.bottom - thumbnailBorderRect.top) / thumbnailBM.getHeight();
+            float scaleRatio = widthRatio < heightRatio ? widthRatio : heightRatio;
+
+            float thumbnailWidth = thumbnailBM.getWidth() * scaleRatio;
+            float thumbnailHeight = thumbnailBM.getHeight() * scaleRatio;
+            thumbnailRect.left = ((thumbnailBorderRect.right - thumbnailBorderRect.left) - thumbnailWidth) / 2 + thumbnailBorderRect.left;
+            thumbnailRect.right = thumbnailRect.left + thumbnailWidth;
+            thumbnailRect.top = ((thumbnailBorderRect.bottom - thumbnailBorderRect.top) - thumbnailHeight) / 2 + thumbnailBorderRect.top;;
+            thumbnailRect.bottom = thumbnailRect.top + thumbnailHeight;
             //绘制缩略图
-            canvas.drawBitmap(thumbnailBM, left, top, drawPaint);
+            canvas.drawBitmap(thumbnailBM, null,thumbnailRect, drawPaint);
             //绘制缩略图边框
-            thumbnailRect.left = left;
-            thumbnailRect.right = left + thumbnailBM.getWidth();
-            thumbnailRect.top = top;
-            thumbnailRect.bottom = top + thumbnailBM.getHeight();
             canvas.drawRect(thumbnailRect, outlinePaint);
             //绘制定位器
             float leftPercent = 1f * (offsetX - strokeRangeRect.left) / getBoardWidth();
             float topPercent = 1f * (offsetY - strokeRangeRect.top) / getBoardHeight();
-            float sizePercent = 1f * mWidth / getBoardWidth();
+            float widthPercent = 1f * mWidth / getBoardWidth();
+            float heightPercent = 1f * mHeight / getBoardHeight();
 
-            localizerRect.left = thumbnailRect.left;
-            localizerRect.right = thumbnailRect.right;
-            localizerRect.top = thumbnailRect.top;
-            localizerRect.bottom = thumbnailRect.bottom;
+            float localizerWidth = (thumbnailRect.right - thumbnailRect.left) * widthPercent;
+            float localizerHeight = (thumbnailRect.bottom - thumbnailRect.top) * heightPercent;
+            localizerRect.left = (int) (leftPercent * (thumbnailRect.right - thumbnailRect.left) + thumbnailRect.left);
+            localizerRect.right = (int) (localizerRect.left + localizerWidth);
+            localizerRect.top = (int) (topPercent * (thumbnailRect.bottom - thumbnailRect.top) + thumbnailRect.top);
+            localizerRect.bottom = (int) (localizerRect.top + localizerHeight);
+            canvas.drawRect(localizerRect, outlinePaint);
+            Log.e("localizer:", localizerRect.toShortString());
+
+            canvas.drawRect(thumbnailBorderRect, outlinePaint);
         }
         canvas.restore();
     }
