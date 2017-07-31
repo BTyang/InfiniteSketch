@@ -23,7 +23,7 @@ import java.util.List;
  * Created by BTyang on 2017/7/27.
  */
 
-public class InfiniteCanvas extends View {
+public class InfiniteCanvas extends View implements LocalizerView.OnPositionChangeListener{
 
     private final static int DEFAULT_COLOR = Color.BLACK;
 
@@ -38,10 +38,18 @@ public class InfiniteCanvas extends View {
     private RectF thumbnailRect;
     private RectF thumbnailBorderRect;
     private RectF strokeRangeRect;
-    private RectF boardRect;
+    private RectF canvasRect;
     private List<Stroke> strokes = new ArrayList<>();
     private int mWidth, mHeight;
+    private LocalizerView localizerView;
     private POINT_MODE mode = POINT_MODE.DRAW;
+
+    @Override
+    public void onPositionChanged(float offsetX, float offsetY) {
+        this.offsetX = offsetX;
+        this.offsetY = offsetY;
+        invalidate();
+    }
 
     enum POINT_MODE {
         DRAG,
@@ -74,7 +82,7 @@ public class InfiniteCanvas extends View {
         thumbnailRect = new RectF();
         localizerRect = new RectF();
         strokeRangeRect = new RectF();
-        boardRect = new RectF();
+        canvasRect = new RectF();
         outlinePaint.setStyle(Paint.Style.STROKE);
     }
 
@@ -95,6 +103,7 @@ public class InfiniteCanvas extends View {
         mHeight = bottom - top;
         thumbnailBorderRect.right = thumbnailBorderRect.left + (int) (mWidth / 3f);
         thumbnailBorderRect.bottom = thumbnailBorderRect.top + (int) (mHeight / 3f);
+        getLocalizerView().initialize(mWidth,mHeight);
     }
 
     @Override
@@ -116,6 +125,7 @@ public class InfiniteCanvas extends View {
                 }
                 updateBoardRect();
                 invalidate();
+                getLocalizerView().notifyPositionChange(canvasRect, offsetX, offsetY, thumbnailBM);
                 break;
             case MotionEvent.ACTION_UP:
             case MotionEvent.ACTION_CANCEL:
@@ -123,6 +133,7 @@ public class InfiniteCanvas extends View {
                 createCurThumbnailBM();
                 updateBoardRect();
                 invalidate();
+                getLocalizerView().notifyPositionChange(canvasRect, offsetX, offsetY, thumbnailBM);
                 break;
         }
         return true;
@@ -133,7 +144,7 @@ public class InfiniteCanvas extends View {
         drawBackground(canvas);
         canvas.translate(-offsetX, -offsetY);
         drawRecord(canvas);
-        drawThumbnail(canvas);
+//        drawThumbnail(canvas);
         drawTestArgs(canvas);
     }
 
@@ -166,35 +177,35 @@ public class InfiniteCanvas extends View {
         float minY = offsetY;
         float maxX = mWidth + offsetX;
         float maxY = mHeight + offsetY;
-        if (minX < boardRect.left) {
-            boardRect.left = (int) minX;
+        if (minX < canvasRect.left) {
+            canvasRect.left = (int) minX;
         }
-        if (maxX > boardRect.right) {
-            boardRect.right = (int) maxX;
+        if (maxX > canvasRect.right) {
+            canvasRect.right = (int) maxX;
         }
-        if (maxY > boardRect.bottom) {
-            boardRect.bottom = (int) maxY;
+        if (maxY > canvasRect.bottom) {
+            canvasRect.bottom = (int) maxY;
         }
-        if (minY < boardRect.top) {
-            boardRect.top = (int) minY;
+        if (minY < canvasRect.top) {
+            canvasRect.top = (int) minY;
         }
-        if (boardRect.right < mWidth) {
-            boardRect.right = mWidth;
+        if (canvasRect.right < mWidth) {
+            canvasRect.right = mWidth;
         }
-        if (boardRect.bottom < mHeight) {
-            boardRect.bottom = mHeight;
+        if (canvasRect.bottom < mHeight) {
+            canvasRect.bottom = mHeight;
         }
-        if (boardRect.left < minX && boardRect.left < strokeRangeRect.left) {
-            boardRect.left = minX;
+        if (canvasRect.left < minX && canvasRect.left < strokeRangeRect.left) {
+            canvasRect.left = minX;
         }
-        if (boardRect.top < minY && boardRect.top < strokeRangeRect.top) {
-            boardRect.top = minY;
+        if (canvasRect.top < minY && canvasRect.top < strokeRangeRect.top) {
+            canvasRect.top = minY;
         }
-        if (boardRect.right > maxX && boardRect.right > strokeRangeRect.right) {
-            boardRect.right = maxX;
+        if (canvasRect.right > maxX && canvasRect.right > strokeRangeRect.right) {
+            canvasRect.right = maxX;
         }
-        if (boardRect.bottom > maxY && boardRect.bottom > strokeRangeRect.bottom) {
-            boardRect.bottom = maxY;
+        if (canvasRect.bottom > maxY && canvasRect.bottom > strokeRangeRect.bottom) {
+            canvasRect.bottom = maxY;
         }
     }
 
@@ -209,7 +220,6 @@ public class InfiniteCanvas extends View {
         canvas.save();
         canvas.translate(offsetX, offsetY);
         if (thumbnailBM != null && !thumbnailBM.isRecycled()) {
-            float left = thumbnailBorderRect.left, top = thumbnailBorderRect.top;
 
             float widthRatio = 1f * (thumbnailBorderRect.right - thumbnailBorderRect.left) / thumbnailBM.getWidth();
             float heightRatio = 1f * (thumbnailBorderRect.bottom - thumbnailBorderRect.top) / thumbnailBM.getHeight();
@@ -227,8 +237,8 @@ public class InfiniteCanvas extends View {
             //绘制缩略图边框
 //            canvas.drawRect(thumbnailRect, outlinePaint);
             //绘制定位器
-            float leftPercent = 1f * (offsetX - boardRect.left) / getBoardWidth();
-            float topPercent = 1f * (offsetY - boardRect.top) / getBoardHeight();
+            float leftPercent = 1f * (offsetX - canvasRect.left) / getBoardWidth();
+            float topPercent = 1f * (offsetY - canvasRect.top) / getBoardHeight();
             float widthPercent = 1f * mWidth / getBoardWidth();
             float heightPercent = 1f * mHeight / getBoardHeight();
 
@@ -277,7 +287,7 @@ public class InfiniteCanvas extends View {
     }
 
     private int getBoardWidth() {
-        int boardWidth = (int) (boardRect.right - boardRect.left);
+        int boardWidth = (int) (canvasRect.right - canvasRect.left);
         if (boardWidth == 0) {
             boardWidth = mWidth;
         }
@@ -285,7 +295,7 @@ public class InfiniteCanvas extends View {
     }
 
     private int getBoardHeight() {
-        int boardHeight = (int) (boardRect.bottom - boardRect.top);
+        int boardHeight = (int) (canvasRect.bottom - canvasRect.top);
         if (boardHeight == 0) {
             boardHeight = mHeight;
         }
@@ -299,7 +309,7 @@ public class InfiniteCanvas extends View {
 
         Canvas canvas = new Canvas(newBM);
 //        canvas.setDrawFilter(new PaintFlagsDrawFilter(0, Paint.ANTI_ALIAS_FLAG | Paint.FILTER_BITMAP_FLAG));//抗锯齿
-        canvas.translate(-boardRect.left, -boardRect.top);
+        canvas.translate(-canvasRect.left, -canvasRect.top);
         //绘制背景
         drawBackground(canvas);
         drawRecord(canvas);
@@ -324,4 +334,12 @@ public class InfiniteCanvas extends View {
         return bitmap;
     }
 
+    public LocalizerView getLocalizerView() {
+        return localizerView;
+    }
+
+    public void setLocalizerView(LocalizerView localizerView) {
+        this.localizerView = localizerView;
+        getLocalizerView().setOnPositionChangeListener(this);
+    }
 }
