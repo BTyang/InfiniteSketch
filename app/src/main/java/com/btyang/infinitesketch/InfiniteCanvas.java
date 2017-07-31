@@ -6,7 +6,6 @@ import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Paint;
 import android.graphics.PointF;
-import android.graphics.Rect;
 import android.graphics.RectF;
 import android.support.annotation.NonNull;
 import android.util.AttributeSet;
@@ -35,10 +34,11 @@ public class InfiniteCanvas extends View {
     private int curColor = DEFAULT_COLOR;
     private Stroke curStroke;
     private Bitmap thumbnailBM;//缩略图文件
-    private Rect localizerRect;
+    private RectF localizerRect;
     private RectF thumbnailRect;
     private RectF thumbnailBorderRect;
     private RectF strokeRangeRect;
+    private RectF boardRect;
     private List<Stroke> strokes = new ArrayList<>();
     private int mWidth, mHeight;
     private POINT_MODE mode = POINT_MODE.DRAW;
@@ -72,8 +72,9 @@ public class InfiniteCanvas extends View {
         drawPaint.setAntiAlias(true);
         thumbnailBorderRect = new RectF(50, 50, 0, 0);
         thumbnailRect = new RectF();
-        localizerRect = new Rect();
+        localizerRect = new RectF();
         strokeRangeRect = new RectF();
+        boardRect = new RectF();
         outlinePaint.setStyle(Paint.Style.STROKE);
     }
 
@@ -113,13 +114,14 @@ public class InfiniteCanvas extends View {
                     addPoint(event.getX(), event.getY());
                     updateStrokeRange(event);
                 }
+                updateBoardRect();
                 invalidate();
                 break;
             case MotionEvent.ACTION_UP:
             case MotionEvent.ACTION_CANCEL:
                 startPoint = null;
                 createCurThumbnailBM();
-//                updateStrokeRange(event);
+                updateBoardRect();
                 invalidate();
                 break;
         }
@@ -159,6 +161,43 @@ public class InfiniteCanvas extends View {
         }
     }
 
+    private void updateBoardRect() {
+        float minX = offsetX;
+        float minY = offsetY;
+        float maxX = mWidth + offsetX;
+        float maxY = mHeight + offsetY;
+        if (minX < boardRect.left) {
+            boardRect.left = (int) minX;
+        }
+        if (maxX > boardRect.right) {
+            boardRect.right = (int) maxX;
+        }
+        if (maxY > boardRect.bottom) {
+            boardRect.bottom = (int) maxY;
+        }
+        if (minY < boardRect.top) {
+            boardRect.top = (int) minY;
+        }
+        if (boardRect.right < mWidth) {
+            boardRect.right = mWidth;
+        }
+        if (boardRect.bottom < mHeight) {
+            boardRect.bottom = mHeight;
+        }
+        if (boardRect.left < minX && boardRect.left < strokeRangeRect.left) {
+            boardRect.left = minX;
+        }
+        if (boardRect.top < minY && boardRect.top < strokeRangeRect.top) {
+            boardRect.top = minY;
+        }
+        if (boardRect.right > maxX && boardRect.right > strokeRangeRect.right) {
+            boardRect.right = maxX;
+        }
+        if (boardRect.bottom > maxY && boardRect.bottom > strokeRangeRect.bottom) {
+            boardRect.bottom = maxY;
+        }
+    }
+
     private void drawTestArgs(Canvas canvas) {
         canvas.save();
         canvas.translate(offsetX, offsetY);
@@ -180,15 +219,16 @@ public class InfiniteCanvas extends View {
             float thumbnailHeight = thumbnailBM.getHeight() * scaleRatio;
             thumbnailRect.left = ((thumbnailBorderRect.right - thumbnailBorderRect.left) - thumbnailWidth) / 2 + thumbnailBorderRect.left;
             thumbnailRect.right = thumbnailRect.left + thumbnailWidth;
-            thumbnailRect.top = ((thumbnailBorderRect.bottom - thumbnailBorderRect.top) - thumbnailHeight) / 2 + thumbnailBorderRect.top;;
+            thumbnailRect.top = ((thumbnailBorderRect.bottom - thumbnailBorderRect.top) - thumbnailHeight) / 2 + thumbnailBorderRect.top;
+            ;
             thumbnailRect.bottom = thumbnailRect.top + thumbnailHeight;
             //绘制缩略图
-            canvas.drawBitmap(thumbnailBM, null,thumbnailRect, drawPaint);
+            canvas.drawBitmap(thumbnailBM, null, thumbnailRect, drawPaint);
             //绘制缩略图边框
-            canvas.drawRect(thumbnailRect, outlinePaint);
+//            canvas.drawRect(thumbnailRect, outlinePaint);
             //绘制定位器
-            float leftPercent = 1f * (offsetX - strokeRangeRect.left) / getBoardWidth();
-            float topPercent = 1f * (offsetY - strokeRangeRect.top) / getBoardHeight();
+            float leftPercent = 1f * (offsetX - boardRect.left) / getBoardWidth();
+            float topPercent = 1f * (offsetY - boardRect.top) / getBoardHeight();
             float widthPercent = 1f * mWidth / getBoardWidth();
             float heightPercent = 1f * mHeight / getBoardHeight();
 
@@ -237,7 +277,7 @@ public class InfiniteCanvas extends View {
     }
 
     private int getBoardWidth() {
-        int boardWidth = (int) (strokeRangeRect.right - strokeRangeRect.left);
+        int boardWidth = (int) (boardRect.right - boardRect.left);
         if (boardWidth == 0) {
             boardWidth = mWidth;
         }
@@ -245,7 +285,7 @@ public class InfiniteCanvas extends View {
     }
 
     private int getBoardHeight() {
-        int boardHeight = (int) (strokeRangeRect.bottom - strokeRangeRect.top);
+        int boardHeight = (int) (boardRect.bottom - boardRect.top);
         if (boardHeight == 0) {
             boardHeight = mHeight;
         }
@@ -259,7 +299,7 @@ public class InfiniteCanvas extends View {
 
         Canvas canvas = new Canvas(newBM);
 //        canvas.setDrawFilter(new PaintFlagsDrawFilter(0, Paint.ANTI_ALIAS_FLAG | Paint.FILTER_BITMAP_FLAG));//抗锯齿
-        canvas.translate(-strokeRangeRect.left, -strokeRangeRect.top);
+        canvas.translate(-boardRect.left, -boardRect.top);
         //绘制背景
         drawBackground(canvas);
         drawRecord(canvas);
