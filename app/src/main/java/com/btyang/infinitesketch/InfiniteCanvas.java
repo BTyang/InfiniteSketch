@@ -34,9 +34,6 @@ public class InfiniteCanvas extends View implements LocalizerView.OnPositionChan
     private int curColor = DEFAULT_COLOR;
     private Stroke curStroke;
     private Bitmap thumbnailBM;//缩略图文件
-    private RectF localizerRect;
-    private RectF thumbnailRect;
-    private RectF thumbnailBorderRect;
     private RectF strokeRangeRect;
     private RectF canvasRect;
     private List<Stroke> strokes = new ArrayList<>();
@@ -78,9 +75,6 @@ public class InfiniteCanvas extends View implements LocalizerView.OnPositionChan
     private void init() {
         drawPaint.setStrokeWidth(0);
         drawPaint.setAntiAlias(true);
-        thumbnailBorderRect = new RectF(50, 50, 0, 0);
-        thumbnailRect = new RectF();
-        localizerRect = new RectF();
         strokeRangeRect = new RectF();
         canvasRect = new RectF();
         outlinePaint.setStyle(Paint.Style.STROKE);
@@ -101,8 +95,6 @@ public class InfiniteCanvas extends View implements LocalizerView.OnPositionChan
         super.onLayout(changed, left, top, right, bottom);
         mWidth = right - left;
         mHeight = bottom - top;
-        thumbnailBorderRect.right = thumbnailBorderRect.left + (int) (mWidth / 3f);
-        thumbnailBorderRect.bottom = thumbnailBorderRect.top + (int) (mHeight / 3f);
         getLocalizerView().initialize(mWidth,mHeight);
     }
 
@@ -144,7 +136,6 @@ public class InfiniteCanvas extends View implements LocalizerView.OnPositionChan
         drawBackground(canvas);
         canvas.translate(-offsetX, -offsetY);
         drawRecord(canvas);
-//        drawThumbnail(canvas);
         drawTestArgs(canvas);
     }
 
@@ -216,45 +207,6 @@ public class InfiniteCanvas extends View implements LocalizerView.OnPositionChan
         canvas.restore();
     }
 
-    private void drawThumbnail(Canvas canvas) {
-        canvas.save();
-        canvas.translate(offsetX, offsetY);
-        if (thumbnailBM != null && !thumbnailBM.isRecycled()) {
-
-            float widthRatio = 1f * (thumbnailBorderRect.right - thumbnailBorderRect.left) / thumbnailBM.getWidth();
-            float heightRatio = 1f * (thumbnailBorderRect.bottom - thumbnailBorderRect.top) / thumbnailBM.getHeight();
-            float scaleRatio = widthRatio < heightRatio ? widthRatio : heightRatio;
-
-            float thumbnailWidth = thumbnailBM.getWidth() * scaleRatio;
-            float thumbnailHeight = thumbnailBM.getHeight() * scaleRatio;
-            thumbnailRect.left = ((thumbnailBorderRect.right - thumbnailBorderRect.left) - thumbnailWidth) / 2 + thumbnailBorderRect.left;
-            thumbnailRect.right = thumbnailRect.left + thumbnailWidth;
-            thumbnailRect.top = ((thumbnailBorderRect.bottom - thumbnailBorderRect.top) - thumbnailHeight) / 2 + thumbnailBorderRect.top;
-            ;
-            thumbnailRect.bottom = thumbnailRect.top + thumbnailHeight;
-            //绘制缩略图
-            canvas.drawBitmap(thumbnailBM, null, thumbnailRect, drawPaint);
-            //绘制缩略图边框
-//            canvas.drawRect(thumbnailRect, outlinePaint);
-            //绘制定位器
-            float leftPercent = 1f * (offsetX - canvasRect.left) / getBoardWidth();
-            float topPercent = 1f * (offsetY - canvasRect.top) / getBoardHeight();
-            float widthPercent = 1f * mWidth / getBoardWidth();
-            float heightPercent = 1f * mHeight / getBoardHeight();
-
-            float localizerWidth = (thumbnailRect.right - thumbnailRect.left) * widthPercent;
-            float localizerHeight = (thumbnailRect.bottom - thumbnailRect.top) * heightPercent;
-            localizerRect.left = (int) (leftPercent * (thumbnailRect.right - thumbnailRect.left) + thumbnailRect.left);
-            localizerRect.right = (int) (localizerRect.left + localizerWidth);
-            localizerRect.top = (int) (topPercent * (thumbnailRect.bottom - thumbnailRect.top) + thumbnailRect.top);
-            localizerRect.bottom = (int) (localizerRect.top + localizerHeight);
-            canvas.drawRect(localizerRect, outlinePaint);
-            Log.e("localizer:", localizerRect.toShortString());
-
-            canvas.drawRect(thumbnailBorderRect, outlinePaint);
-        }
-        canvas.restore();
-    }
 
     private void drawRecord(Canvas canvas) {
         for (Stroke stroke : strokes) {

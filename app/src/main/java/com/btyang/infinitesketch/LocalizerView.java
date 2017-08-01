@@ -119,7 +119,6 @@ public class LocalizerView extends View {
             localizerRect.top = (int) (topPercent * (thumbnailRect.bottom - thumbnailRect.top) + thumbnailRect.top);
             localizerRect.bottom = (int) (localizerRect.top + localizerHeight);
             canvas.drawRect(localizerRect, outlinePaint);
-            Log.e("localizer:", localizerRect.toShortString());
 
         }
     }
@@ -168,14 +167,11 @@ public class LocalizerView extends View {
                 startPoint = new PointF(event.getX(), event.getY());
                 break;
             case MotionEvent.ACTION_MOVE:
-                offsetX2 += startPoint.x - event.getX();
-                offsetY2 += startPoint.y - event.getY();
+                float tempX = offsetX2 + startPoint.x - event.getX();
+                float tempY = offsetY2 + startPoint.y - event.getY();
                 startPoint = new PointF(event.getX(), event.getY());
-//                if (onPositionChangeListener != null) {
-//                    onPositionChangeListener.onPositionChanged(offsetX2, offsetY2);
-//                }
-                Log.e("onTouchEvent", offsetX2 + "," + offsetY2);
-                calculateOffset(offsetX2, offsetY2);
+//                Log.e("onTouchEvent", offsetX2 + "," + offsetY2);
+                calculateOffset(tempX, tempY);
                 break;
             case MotionEvent.ACTION_UP:
             case MotionEvent.ACTION_CANCEL:
@@ -186,20 +182,23 @@ public class LocalizerView extends View {
         return true;
     }
 
-    private void calculateOffset(float offsetX2, float offsetY2) {
-        offsetX2 *= 0.1;
-        offsetY2 *= 0.1;
+    private void calculateOffset(float tempX, float tempY) {
+        tempX *= 0.5;
+        tempY *= 0.5;
         float curLeft = localizerRect.left;
         float curTop = localizerRect.top;
         float width = localizerRect.right - localizerRect.left;
         float height = localizerRect.bottom - localizerRect.top;
-        if ((curLeft - offsetX2) > thumbnailRect.left && (curLeft - offsetX2) + width < thumbnailRect.right) {
+        if ((curLeft - tempX) > thumbnailRect.left && (curLeft - tempX) + width < thumbnailRect.right) {
+            offsetX2 = tempX;
             offsetX = ((curLeft - offsetX2) - thumbnailRect.left) / (thumbnailRect.right - thumbnailRect.left) * getCanvasWidth() + canvasRect.left;
         }
-        if ((curTop - offsetY2) > thumbnailRect.top && (curTop - offsetY2) + height < thumbnailRect.bottom) {
+        if ((curTop - tempY) > thumbnailRect.top && (curTop - tempY) + height < thumbnailRect.bottom) {
+            offsetY2 = tempY;
             offsetY = ((curTop - offsetY2) - thumbnailRect.top) / (thumbnailRect.bottom - thumbnailRect.top) * getCanvasHeight() + canvasRect.top;
 
         }
+        Log.e("calculateOffset", offsetX2 + "," + offsetY2);
         if (onPositionChangeListener != null) {
             onPositionChangeListener.onPositionChanged(offsetX, offsetY);
         }
