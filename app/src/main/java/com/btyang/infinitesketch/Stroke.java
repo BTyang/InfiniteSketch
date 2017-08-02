@@ -1,9 +1,8 @@
 package com.btyang.infinitesketch;
 
-import android.graphics.PointF;
-
-import java.util.ArrayList;
-import java.util.List;
+import android.graphics.Color;
+import android.graphics.Paint;
+import android.graphics.Path;
 
 /**
  * 笔迹
@@ -12,35 +11,29 @@ import java.util.List;
 
 public class Stroke {
 
-    private int color;
-    private List<PointF> points = new ArrayList<>();
+    private final static int DEFAULT_COLOR = Color.BLACK;
+    private final static int DEFAULT_STROKE_WIDTH = 5;
 
-    public Stroke(int color) {
-        this.color = color;
-    }
+    public Paint paint;//笔类
+    public Path path = new Path();//画笔路径数据
 
-    public void addPoint(float x, float y) {
-        points.add(new PointF(x, y));
-    }
-
-    public int getLength() {
-        return points.size();
-    }
-
-
-    public List<PointF> getPoints() {
-        return points;
-    }
-
-    public boolean isValid() {
-        return points.size() >= 2;
+    public Stroke() {
+        paint = new Paint();
+        paint.setAntiAlias(true);
+        paint.setDither(true);
+        paint.setColor(DEFAULT_COLOR);
+        paint.setStyle(Paint.Style.STROKE);
+        paint.setStrokeJoin(Paint.Join.ROUND);
+        paint.setStrokeCap(Paint.Cap.ROUND);
+        paint.setStrokeWidth(DEFAULT_STROKE_WIDTH);
     }
 
     public void setColor(int color) {
-        this.color = color;
+        this.paint.setColor(color);
     }
 
-    public int getColor() {
-        return color;
+    public boolean isValid() {
+        return !path.isEmpty();
     }
+
 }

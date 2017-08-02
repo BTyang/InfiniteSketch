@@ -23,13 +23,10 @@ import java.util.List;
 
 public class InfiniteCanvas extends View implements LocalizerView.OnPositionChangeListener {
 
-    private final static int DEFAULT_COLOR = Color.BLACK;
-
     private Paint drawPaint = new Paint();
     private Paint outlinePaint = new Paint();
     private PointF startPoint;
     private float offsetX, offsetY;
-    private int curColor = DEFAULT_COLOR;
     private Stroke curStroke;
     private Bitmap thumbnailBM;//缩略图文件
     private RectF strokeRangeRect;
@@ -38,6 +35,7 @@ public class InfiniteCanvas extends View implements LocalizerView.OnPositionChan
     private int mWidth, mHeight;
     private LocalizerView localizerView;
     private POINT_MODE mode = POINT_MODE.DRAW;
+    public float downX, downY, preX, preY, curX, curY;
 
     @Override
     public void onPositionChanged(float offsetX, float offsetY) {
@@ -78,16 +76,6 @@ public class InfiniteCanvas extends View implements LocalizerView.OnPositionChan
         outlinePaint.setStyle(Paint.Style.STROKE);
     }
 
-    private void addPoint(float x, float y) {
-        if (curStroke == null && strokes.size() > 0) {
-            curStroke = strokes.get(strokes.size() - 1);
-        }
-        if (curStroke == null) {
-            return;
-        }
-        curStroke.addPoint(x + offsetX, y + offsetY);
-    }
-
     @Override
     protected void onLayout(boolean changed, int left, int top, int right, int bottom) {
         super.onLayout(changed, left, top, right, bottom);
@@ -98,36 +86,65 @@ public class InfiniteCanvas extends View implements LocalizerView.OnPositionChan
 
     @Override
     public boolean onTouchEvent(MotionEvent event) {
+        curX = event.getX() + offsetX;
+        curY = event.getY() + offsetY;
         switch (event.getAction()) {
             case MotionEvent.ACTION_DOWN:
-                startPoint = new PointF(event.getX(), event.getY());
-                curStroke = new Stroke(curColor);
-                strokes.add(curStroke);
+                touch_down(event);
                 break;
             case MotionEvent.ACTION_MOVE:
-                if (event.getPointerCount() > 1 || mode == POINT_MODE.DRAG) {
-                    offsetX += startPoint.x - event.getX();
-                    offsetY += startPoint.y - event.getY();
-                    startPoint = new PointF(event.getX(), event.getY());
-                } else {
-                    addPoint(event.getX(), event.getY());
-                    updateStrokeRange(event);
-                }
-                // TODO: 2017/8/2 每次拖动都更新缩略图的bitmap可以实时更新，但是会导致卡顿
-                updateBoardRect();
-                invalidate();
-                getLocalizerView().notifyPositionChange(canvasRect, offsetX, offsetY, getResultBitmap());
+                touch_move(event);
                 break;
             case MotionEvent.ACTION_UP:
             case MotionEvent.ACTION_CANCEL:
-                startPoint = null;
-//                createCurThumbnailBM();
-                updateBoardRect();
-                invalidate();
-                getLocalizerView().notifyPositionChange(canvasRect, offsetX, offsetY, getResultBitmap());
+                touch_up(event);
                 break;
         }
+        preX = curX;
+        preY = curY;
         return true;
+    }
+
+    public void touch_down(MotionEvent event) {
+        downX = curX;
+        downY = curY;
+        startPoint = new PointF(event.getX(), event.getY());
+        curStroke = new Stroke();
+        curStroke.path.moveTo(downX, downY);
+        strokes.add(curStroke);
+    }
+
+    public void touch_move(MotionEvent event) {
+        if (event.getPointerCount() > 1 || mode == POINT_MODE.DRAG) {
+            offsetX += startPoint.x - event.getX();
+            offsetY += startPoint.y - event.getY();
+            startPoint = new PointF(event.getX(), event.getY());
+        } else {
+            addPoint();
+            updateStrokeRange(event);
+        }
+        // TODO: 2017/8/2 每次拖动都更新缩略图的bitmap可以实时更新，但是会导致卡顿
+        updateBoardRect();
+        invalidate();
+        getLocalizerView().notifyPositionChange(canvasRect, offsetX, offsetY, getResultBitmap());
+    }
+
+    private void addPoint() {
+        if (curStroke == null && strokes.size() > 0) {
+            curStroke = strokes.get(strokes.size() - 1);
+        }
+        if (curStroke == null) {
+            return;
+        }
+        curStroke.path.quadTo(preX, preY, (curX + preX) / 2, (curY + preY) / 2);
+    }
+
+    public void touch_up(MotionEvent event) {
+        startPoint = null;
+//        createCurThumbnailBM();
+        updateBoardRect();
+        invalidate();
+        getLocalizerView().notifyPositionChange(canvasRect, offsetX, offsetY, getResultBitmap());
     }
 
     @Override
@@ -209,16 +226,7 @@ public class InfiniteCanvas extends View implements LocalizerView.OnPositionChan
 
     private void drawRecord(Canvas canvas) {
         for (Stroke stroke : strokes) {
-            drawPaint.setColor(stroke.getColor());
-            PointF lastPoint = null;
-            for (PointF point : stroke.getPoints()) {
-                if (lastPoint == null) {
-                    lastPoint = point;
-                    continue;
-                }
-                canvas.drawLine(lastPoint.x, lastPoint.y, point.x, point.y, drawPaint);
-                lastPoint = point;
-            }
+            canvas.drawPath(stroke.path, stroke.paint);
         }
 
     }
