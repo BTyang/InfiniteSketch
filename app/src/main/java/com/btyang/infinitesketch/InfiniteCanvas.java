@@ -5,15 +5,13 @@ import android.graphics.Bitmap;
 import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Paint;
+import android.graphics.PaintFlagsDrawFilter;
 import android.graphics.PointF;
 import android.graphics.RectF;
 import android.support.annotation.NonNull;
 import android.util.AttributeSet;
-import android.util.Log;
 import android.view.MotionEvent;
 import android.view.View;
-
-import com.btyang.infinitesketch.utils.BitmapUtils;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -23,7 +21,7 @@ import java.util.List;
  * Created by BTyang on 2017/7/27.
  */
 
-public class InfiniteCanvas extends View implements LocalizerView.OnPositionChangeListener{
+public class InfiniteCanvas extends View implements LocalizerView.OnPositionChangeListener {
 
     private final static int DEFAULT_COLOR = Color.BLACK;
 
@@ -95,7 +93,7 @@ public class InfiniteCanvas extends View implements LocalizerView.OnPositionChan
         super.onLayout(changed, left, top, right, bottom);
         mWidth = right - left;
         mHeight = bottom - top;
-        getLocalizerView().initialize(mWidth,mHeight);
+        getLocalizerView().initialize(mWidth, mHeight);
     }
 
     @Override
@@ -115,17 +113,18 @@ public class InfiniteCanvas extends View implements LocalizerView.OnPositionChan
                     addPoint(event.getX(), event.getY());
                     updateStrokeRange(event);
                 }
+                // TODO: 2017/8/2 每次拖动都更新缩略图的bitmap可以实时更新，但是会导致卡顿
                 updateBoardRect();
                 invalidate();
-                getLocalizerView().notifyPositionChange(canvasRect, offsetX, offsetY, thumbnailBM);
+                getLocalizerView().notifyPositionChange(canvasRect, offsetX, offsetY, getResultBitmap());
                 break;
             case MotionEvent.ACTION_UP:
             case MotionEvent.ACTION_CANCEL:
                 startPoint = null;
-                createCurThumbnailBM();
+//                createCurThumbnailBM();
                 updateBoardRect();
                 invalidate();
-                getLocalizerView().notifyPositionChange(canvasRect, offsetX, offsetY, thumbnailBM);
+                getLocalizerView().notifyPositionChange(canvasRect, offsetX, offsetY, getResultBitmap());
                 break;
         }
         return true;
@@ -233,11 +232,6 @@ public class InfiniteCanvas extends View implements LocalizerView.OnPositionChan
         canvas.drawColor(Color.WHITE);
     }
 
-    @NonNull
-    public Bitmap getResultBitmap() {
-        return getResultBitmap(null);
-    }
-
     private int getBoardWidth() {
         int boardWidth = (int) (canvasRect.right - canvasRect.left);
         if (boardWidth == 0) {
@@ -255,36 +249,26 @@ public class InfiniteCanvas extends View implements LocalizerView.OnPositionChan
     }
 
     @NonNull
-    public Bitmap getResultBitmap(Bitmap addBitmap) {
+    public Bitmap getResultBitmap() {
         Bitmap newBM = Bitmap.createBitmap(getBoardWidth(), getBoardHeight(), Bitmap.Config.RGB_565);
-//        Bitmap newBM = Bitmap.createBitmap(1280, 800, Bitmap.Config.RGB_565);
 
         Canvas canvas = new Canvas(newBM);
-//        canvas.setDrawFilter(new PaintFlagsDrawFilter(0, Paint.ANTI_ALIAS_FLAG | Paint.FILTER_BITMAP_FLAG));//抗锯齿
+        canvas.setDrawFilter(new PaintFlagsDrawFilter(0, Paint.ANTI_ALIAS_FLAG | Paint.FILTER_BITMAP_FLAG));//抗锯齿
         canvas.translate(-canvasRect.left, -canvasRect.top);
         //绘制背景
         drawBackground(canvas);
         drawRecord(canvas);
 
-        if (addBitmap != null) {
-            canvas.drawBitmap(addBitmap, 0, 0, null);
-        }
         canvas.save(Canvas.ALL_SAVE_FLAG);
         canvas.restore();
-//        Bitmap bitmap = BitmapUtils.createBitmapThumbnail(newBM, true, 800, 1280);//        return newBM;
         return newBM;
     }
 
     @NonNull
     public void createCurThumbnailBM() {
-        thumbnailBM = getThumbnailResultBitmap();
+        thumbnailBM = getResultBitmap();
     }
 
-    @NonNull
-    public Bitmap getThumbnailResultBitmap() {
-        Bitmap bitmap = BitmapUtils.createBitmapThumbnail(getResultBitmap(), true, Math.round(getBoardWidth() / 4f), Math.round(getBoardHeight() / 4f));
-        return bitmap;
-    }
 
     public LocalizerView getLocalizerView() {
         return localizerView;

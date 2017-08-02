@@ -20,15 +20,13 @@ import android.view.View;
 
 public class LocalizerView extends View {
 
-    private int mWidth, mHeight;
-    private int mBoardWidth, mBoardHeight;
-    private float offsetX, offsetY;
-    private float offsetX2, offsetY2;
+    private int mWidth, mHeight;//当前view的宽高
+    private int mBoardWidth, mBoardHeight;//画板的物理宽高
+    private float sketchOffsetX, sketchOffsetY;
     private Bitmap thumbnailBitmap;//缩略图文件
-    private RectF localizerRect;
-    private RectF thumbnailRect;
-    private RectF strokeRangeRect;
-    private RectF canvasRect;
+    private RectF localizerRect;//定位器范围
+    private RectF thumbnailRect;//缩略图范围
+    private RectF canvasRect;//画板的虚拟画布范围
     private RectF borderRect;//边框
     private Paint outlinePaint = new Paint();
     private PointF startPoint;
@@ -53,7 +51,6 @@ public class LocalizerView extends View {
     private void init() {
         thumbnailRect = new RectF();
         localizerRect = new RectF();
-        strokeRangeRect = new RectF();
         canvasRect = new RectF();
         borderRect = new RectF();
         outlinePaint.setStyle(Paint.Style.STROKE);
@@ -62,16 +59,18 @@ public class LocalizerView extends View {
     public void initialize(int boardWidth, int canvasHeight) {
         mBoardWidth = boardWidth;
         mBoardHeight = canvasHeight;
+        //缩略图view的大小为画板view的1/4
+        mWidth = (int) (mBoardWidth / 4f);
+        mHeight = (int) (mBoardHeight / 4f);
+        borderRect.right = borderRect.left + mWidth;
+        borderRect.bottom = borderRect.top + mHeight;
     }
 
     @Override
-    protected void onLayout(boolean changed, int left, int top, int right, int bottom) {
-        super.onLayout(changed, left, top, right, bottom);
-        borderRect.right = borderRect.left + (right - left);
-        borderRect.bottom = borderRect.top + (bottom - top);
-        mWidth = right - left - 1;
-        mHeight = bottom - top - 1;
+    protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
+        setMeasuredDimension(mWidth, mHeight);
     }
+
 
     @Override
     protected void onDraw(Canvas canvas) {
@@ -91,24 +90,26 @@ public class LocalizerView extends View {
 
     private void drawThumbnail(Canvas canvas) {
         if (thumbnailBitmap != null && !thumbnailBitmap.isRecycled()) {
-
-            float widthRatio = 1f * mWidth / thumbnailBitmap.getWidth();
-            float heightRatio = 1f * mHeight / thumbnailBitmap.getHeight();
+            float canvasWidth = canvasRect.right - canvasRect.left;
+            float canvasHeight = canvasRect.bottom - canvasRect.top;
+            float widthRatio = 1f * mWidth / canvasWidth;
+            float heightRatio = 1f * mHeight / canvasHeight;
             float scaleRatio = widthRatio < heightRatio ? widthRatio : heightRatio;
 
-            float thumbnailWidth = thumbnailBitmap.getWidth() * scaleRatio;
-            float thumbnailHeight = thumbnailBitmap.getHeight() * scaleRatio;
-            thumbnailRect.left = (mWidth - thumbnailWidth) / 2;
-            thumbnailRect.right = thumbnailRect.left + thumbnailWidth;
-            thumbnailRect.top = (mHeight - thumbnailHeight) / 2;
-            thumbnailRect.bottom = thumbnailRect.top + thumbnailHeight;
+            float thumbnailWidth = canvasWidth * scaleRatio;
+            float thumbnailHeight = canvasHeight * scaleRatio;
+            int padding = 1;//可能是由于数值计算上的舍入误差，缩略图在某些情况下会盖住边框，所有这里预留1个像素的padding
+            thumbnailRect.left = (mWidth - thumbnailWidth) / 2 + padding;
+            thumbnailRect.right = thumbnailRect.left + (thumbnailWidth - padding * 2);
+            thumbnailRect.top = (mHeight - thumbnailHeight) / 2 + padding;
+            thumbnailRect.bottom = thumbnailRect.top + (thumbnailHeight - padding * 2);
             //绘制缩略图
             canvas.drawBitmap(thumbnailBitmap, null, thumbnailRect, null);
             //绘制缩略图边框
 //            canvas.drawRect(thumbnailRect, outlinePaint);
             //绘制定位器
-            float leftPercent = 1f * (offsetX - canvasRect.left) / getCanvasWidth();
-            float topPercent = 1f * (offsetY - canvasRect.top) / getCanvasHeight();
+            float leftPercent = 1f * (sketchOffsetX - canvasRect.left) / getCanvasWidth();
+            float topPercent = 1f * (sketchOffsetY - canvasRect.top) / getCanvasHeight();
             float widthPercent = 1f * mBoardWidth / getCanvasWidth();
             float heightPercent = 1f * mBoardHeight / getCanvasHeight();
 
@@ -144,10 +145,10 @@ public class LocalizerView extends View {
         return canvasHeight;
     }
 
-    public void notifyPositionChange(RectF canvasRect, float offsetX, float offsetY, Bitmap thumbnailBitmap) {
+    public void notifyPositionChange(RectF canvasRect, float sketchOffsetX, float sketchOffsetY, Bitmap thumbnailBitmap) {
         this.canvasRect = canvasRect;
-        this.offsetX = offsetX;
-        this.offsetY = offsetY;
+        this.sketchOffsetX = sketchOffsetX;
+        this.sketchOffsetY = sketchOffsetY;
         this.thumbnailBitmap = thumbnailBitmap;
         invalidate();
     }
@@ -157,7 +158,7 @@ public class LocalizerView extends View {
     }
 
     interface OnPositionChangeListener {
-        void onPositionChanged(float offsetX, float offsetY);
+        void onPositionChanged(float sketchOffsetX, float sketchOffsetY);
     }
 
     @Override
@@ -167,11 +168,10 @@ public class LocalizerView extends View {
                 startPoint = new PointF(event.getX(), event.getY());
                 break;
             case MotionEvent.ACTION_MOVE:
-                float tempX = offsetX2 + startPoint.x - event.getX();
-                float tempY = offsetY2 + startPoint.y - event.getY();
+                float offsetX = startPoint.x - event.getX();
+                float offsetY = startPoint.y - event.getY();
                 startPoint = new PointF(event.getX(), event.getY());
-//                Log.e("onTouchEvent", offsetX2 + "," + offsetY2);
-                calculateOffset(tempX, tempY);
+                calculateOffset(offsetX, offsetY);
                 break;
             case MotionEvent.ACTION_UP:
             case MotionEvent.ACTION_CANCEL:
@@ -181,26 +181,23 @@ public class LocalizerView extends View {
         invalidate();
         return true;
     }
-
-    private void calculateOffset(float tempX, float tempY) {
-        tempX *= 0.5;
-        tempY *= 0.5;
+    //计算因拖动定位器产生的画布偏移
+    private void calculateOffset(float offsetX, float offsetY) {
         float curLeft = localizerRect.left;
         float curTop = localizerRect.top;
         float width = localizerRect.right - localizerRect.left;
         float height = localizerRect.bottom - localizerRect.top;
-        if ((curLeft - tempX) > thumbnailRect.left && (curLeft - tempX) + width < thumbnailRect.right) {
-            offsetX2 = tempX;
-            offsetX = ((curLeft - offsetX2) - thumbnailRect.left) / (thumbnailRect.right - thumbnailRect.left) * getCanvasWidth() + canvasRect.left;
+        //定位器不能拖出缩略图的边界
+        if ((curLeft - offsetX) > thumbnailRect.left && (curLeft - offsetX) + width < thumbnailRect.right) {
+            sketchOffsetX = ((curLeft - offsetX) - thumbnailRect.left) / (thumbnailRect.right - thumbnailRect.left) * getCanvasWidth() + canvasRect.left;
         }
-        if ((curTop - tempY) > thumbnailRect.top && (curTop - tempY) + height < thumbnailRect.bottom) {
-            offsetY2 = tempY;
-            offsetY = ((curTop - offsetY2) - thumbnailRect.top) / (thumbnailRect.bottom - thumbnailRect.top) * getCanvasHeight() + canvasRect.top;
+        if ((curTop - offsetY) > thumbnailRect.top && (curTop - offsetY) + height < thumbnailRect.bottom) {
+            sketchOffsetY = ((curTop - offsetY) - thumbnailRect.top) / (thumbnailRect.bottom - thumbnailRect.top) * getCanvasHeight() + canvasRect.top;
 
         }
-        Log.e("calculateOffset", offsetX2 + "," + offsetY2);
+        Log.e("calculateOffset", offsetX + "," + offsetY);
         if (onPositionChangeListener != null) {
-            onPositionChangeListener.onPositionChanged(offsetX, offsetY);
+            onPositionChangeListener.onPositionChanged(sketchOffsetX, sketchOffsetY);
         }
     }
 }
