@@ -4,8 +4,10 @@ import android.content.Context;
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
 import android.graphics.Color;
+import android.graphics.Matrix;
 import android.graphics.Paint;
 import android.graphics.PaintFlagsDrawFilter;
+import android.graphics.Path;
 import android.graphics.PointF;
 import android.graphics.RectF;
 import android.support.annotation.NonNull;
@@ -126,7 +128,7 @@ public class InfiniteCanvas extends View implements LocalizerView.OnPositionChan
         // TODO: 2017/8/2 每次拖动都更新缩略图的bitmap可以实时更新，但是会导致卡顿
         updateBoardRect();
         invalidate();
-        getLocalizerView().notifyPositionChange(canvasRect, offsetX, offsetY, getResultBitmap());
+        getLocalizerView().notifyPositionChange(canvasRect, offsetX, offsetY, getThumbnailBitmap());
     }
 
     private void addPoint() {
@@ -144,7 +146,7 @@ public class InfiniteCanvas extends View implements LocalizerView.OnPositionChan
 //        createCurThumbnailBM();
         updateBoardRect();
         invalidate();
-        getLocalizerView().notifyPositionChange(canvasRect, offsetX, offsetY, getResultBitmap());
+        getLocalizerView().notifyPositionChange(canvasRect, offsetX, offsetY, getThumbnailBitmap());
     }
 
     @Override
@@ -231,6 +233,16 @@ public class InfiniteCanvas extends View implements LocalizerView.OnPositionChan
 
     }
 
+    private void drawScaledRecord(Canvas canvas, float scaleRatio) {
+        canvas.save();
+        canvas.translate(-canvasRect.left * scaleRatio, -canvasRect.top * scaleRatio);
+        for (Stroke stroke : strokes) {
+            canvas.drawPath(scalePath(stroke.path, scaleRatio), stroke.paint);
+        }
+        canvas.restore();
+
+    }
+
     /**
      * 绘制背景
      *
@@ -256,16 +268,18 @@ public class InfiniteCanvas extends View implements LocalizerView.OnPositionChan
         return boardHeight;
     }
 
+    float thumbnailScaleRatio = 1f;
+
     @NonNull
-    public Bitmap getResultBitmap() {
-        Bitmap newBM = Bitmap.createBitmap(getBoardWidth(), getBoardHeight(), Bitmap.Config.RGB_565);
+    public Bitmap getThumbnailBitmap() {
+        thumbnailScaleRatio = Math.min(1f * mWidth / getBoardWidth(), 1f * mHeight / getBoardHeight());
+        Bitmap newBM = Bitmap.createBitmap(getThumbnailWidth(), getThumbnailHeight(), Bitmap.Config.RGB_565);
 
         Canvas canvas = new Canvas(newBM);
         canvas.setDrawFilter(new PaintFlagsDrawFilter(0, Paint.ANTI_ALIAS_FLAG | Paint.FILTER_BITMAP_FLAG));//抗锯齿
-        canvas.translate(-canvasRect.left, -canvasRect.top);
         //绘制背景
         drawBackground(canvas);
-        drawRecord(canvas);
+        drawScaledRecord(canvas, thumbnailScaleRatio);
 
         canvas.save(Canvas.ALL_SAVE_FLAG);
         canvas.restore();
@@ -274,7 +288,61 @@ public class InfiniteCanvas extends View implements LocalizerView.OnPositionChan
 
     @NonNull
     public void createCurThumbnailBM() {
-        thumbnailBM = getResultBitmap();
+        thumbnailBM = getThumbnailBitmap();
+    }
+
+    private int getThumbnailWidth() {
+        return (int) (getBoardWidth() * thumbnailScaleRatio);
+    }
+
+    private int getThumbnailHeight() {
+        return (int) (getBoardHeight() * thumbnailScaleRatio);
+    }
+
+    /**
+     * 缩放图形
+     *
+     * @param srcMatrix
+     * @param scaleRatio
+     * @return
+     */
+    private Matrix scaleMatrix(Matrix srcMatrix, float scaleRatio) {
+        Matrix scaleMatrix = new Matrix(srcMatrix);
+        scaleMatrix.postScale(scaleRatio, scaleRatio);
+        return scaleMatrix;
+    }
+
+
+    /**
+     * 缩放笔迹
+     *
+     * @param srcPath
+     * @param scaleRatio
+     * @return
+     */
+    private Path scalePath(Path srcPath, float scaleRatio) {
+        Path newPath = new Path(srcPath);
+        Matrix scaleMatrix = new Matrix();
+//        RectF rectF = new RectF();
+//        newPath.computeBounds(rectF, true);
+        scaleMatrix.setScale(scaleRatio, scaleRatio, 0, 0);
+        newPath.transform(scaleMatrix);
+        return newPath;
+    }
+
+    /**
+     * 缩放形状（直线、圆）
+     *
+     * @param srcRect
+     * @param scaleRatio
+     * @return
+     */
+    private RectF scaleRect(RectF srcRect, float scaleRatio) {
+        RectF newRect = new RectF(srcRect);
+        Matrix scaleMatrix = new Matrix();
+        scaleMatrix.setScale(scaleRatio, scaleRatio, 0, 0);
+        scaleMatrix.mapRect(newRect, srcRect);
+        return newRect;
     }
 
 
